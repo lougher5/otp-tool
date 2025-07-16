@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OTP QR Code Tool</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.3/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .tab-active {
+            border-color: #4f46e5;
+            color: #4f46e5;
+            background-color: #eef2ff;
+        }
+        .tab-inactive {
+            border-color: transparent;
+            color: #6b7280;
+        }
+        #qr-canvas-container {
+            background:
+                linear-gradient(45deg, #f3f4f6 25%, transparent 25%),
+                linear-gradient(-45deg, #f3f4f6 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #f3f4f6 75%),
+                linear-gradient(-45deg, transparent 75%, #f3f4f6 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-md bg-white rounded-2xl shadow-xl p-6 md:p-8 space-y-6">
+        <h1 class="text-2xl md:text-3xl font-bold text-center text-gray-900">OTP QR Tool</h1>
+
+        <!-- Tab Controls -->
+        <div class="flex border-b border-gray-200">
+            <button id="encoder-tab" class="flex-1 py-3 px-4 text-sm font-semibold text-center transition-colors duration-200 ease-in-out tab-active" onclick="switchTab('encoder')">
+                Generate QR Code
+            </button>
+            <button id="decoder-tab" class="flex-1 py-3 px-4 text-sm font-semibold text-center transition-colors duration-200 ease-in-out tab-inactive" onclick="switchTab('decoder')">
+                Decode QR Code
+            </button>
+        </div>
+
+        <!-- Encoder View -->
+        <div id="encoder-view">
+            <div class="space-y-4">
+                <div>
+                    <label for="issuer" class="block text-sm font-medium text-gray-700 mb-1">Issuer (e.g., Google, GitHub)</label>
+                    <input type="text" id="issuer" class="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="My Awesome App">
+                </div>
+                <div>
+                    <label for="account" class="block text-sm font-medium text-gray-700 mb-1">Account (e.g., user@example.com)</label>
+                    <input type="text" id="account" class="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="your.email@example.com">
+                </div>
+                <div>
+                    <label for="secret" class="block text-sm font-medium text-gray-700 mb-1">Secret Key</label>
+                    <input type="text" id="secret" class="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" placeholder="YourBase32SecretHere">
+                </div>
+                <button id="generate-btn" class="w-full bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-transform transform hover:scale-105">
+                    Generate
+                </button>
+            </div>
+            <div id="qr-code-container" class="mt-6 hidden">
+                <h3 class="text-lg font-semibold text-center mb-4">Generated QR Code</h3>
+                <div id="qr-canvas-container" class="p-4 rounded-lg border border-gray-200 inline-block mx-auto">
+                    <canvas id="qr-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Decoder View -->
+        <div id="decoder-view" class="hidden">
+            <div class="space-y-4">
+                <p class="text-sm text-center text-gray-600">Upload a QR code image to decode the OTP secret.</p>
+                <div class="flex items-center justify-center w-full">
+                    <label for="qr-file" class="flex flex-col items-center justify-center w-full h-48 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition">
+                        <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                            <svg class="w-10 h-10 mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                            <p class="mb-2 text-sm text-gray-500"><span class="font-semibold">Click to upload</span> or drag and drop</p>
+                            <p id="file-name" class="text-xs text-gray-500">PNG, JPG, GIF</p>
+                        </div>
+                        <input id="qr-file" type="file" class="hidden" accept="image/*">
+                    </label>
+                </div>
+                <canvas id="decode-canvas" class="hidden"></canvas>
+            </div>
+            <div id="decoded-result" class="mt-6 hidden space-y-3 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
+                <h3 class="text-lg font-semibold text-indigo-800">Decoded Information</h3>
+                <div id="decoded-content"></div>
+            </div>
+        </div>
+
+        <!-- Message Box -->
+        <div id="message-box" class="hidden mt-4 p-3 text-sm rounded-lg text-center font-medium"></div>
+
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const encoderTab = document.getElementById('encoder-tab');
+        const decoderTab = document.getElementById('decoder-tab');
+        const encoderView = document.getElementById('encoder-view');
+        const decoderView = document.getElementById('decoder-view');
+        
+        const generateBtn = document.getElementById('generate-btn');
+        const qrCodeContainer = document.getElementById('qr-code-container');
+        const qrCanvas = document.getElementById('qr-canvas');
+        
+        const qrFileInput = document.getElementById('qr-file');
+        const decodeCanvas = document.getElementById('decode-canvas');
+        const decodedResultContainer = document.getElementById('decoded-result');
+        const decodedContent = document.getElementById('decoded-content');
+        const fileNameDisplay = document.getElementById('file-name');
+
+        const messageBox = document.getElementById('message-box');
+
+        // --- Tab Switching Logic ---
+        function switchTab(tab) {
+            if (tab === 'encoder') {
+                encoderTab.classList.add('tab-active');
+                encoderTab.classList.remove('tab-inactive');
+                decoderTab.classList.add('tab-inactive');
+                decoderTab.classList.remove('tab-active');
+                encoderView.classList.remove('hidden');
+                decoderView.classList.add('hidden');
+            } else {
+                decoderTab.classList.add('tab-active');
+                decoderTab.classList.remove('tab-inactive');
+                encoderTab.classList.add('tab-inactive');
+                encoderTab.classList.remove('tab-active');
+                decoderView.classList.remove('hidden');
+                encoderView.classList.add('hidden');
+            }
+            hideMessage();
+        }
+
+        // --- Message Box Logic ---
+        function showMessage(text, isError = false) {
+            messageBox.textContent = text;
+            messageBox.classList.remove('hidden');
+            if (isError) {
+                messageBox.classList.add('bg-red-100', 'text-red-700');
+                messageBox.classList.remove('bg-green-100', 'text-green-700');
+            } else {
+                messageBox.classList.add('bg-green-100', 'text-green-700');
+                messageBox.classList.remove('bg-red-100', 'text-red-700');
+            }
+        }
+
+        function hideMessage() {
+            messageBox.classList.add('hidden');
+        }
+
+        // --- Encoder Logic ---
+        generateBtn.addEventListener('click', () => {
+            const issuer = document.getElementById('issuer').value.trim();
+            const account = document.getElementById('account').value.trim();
+            const secret = document.getElementById('secret').value.trim().replace(/\s/g, '');
+
+            if (!secret) {
+                showMessage('Secret Key is a required field.', true);
+                qrCodeContainer.classList.add('hidden');
+                return;
+            }
+            
+            hideMessage();
+
+            const label = issuer ? `${issuer}:${account}` : account;
+            const otpauthUrl = `otpauth://totp/${encodeURIComponent(label)}?secret=${secret}${issuer ? `&issuer=${encodeURIComponent(issuer)}` : ''}`;
+
+            qrCodeContainer.classList.remove('hidden');
+            QRCode.toCanvas(qrCanvas, otpauthUrl, { width: 256, margin: 2, errorCorrectionLevel: 'M' }, function (error) {
+                if (error) {
+                    console.error(error);
+                    showMessage('Failed to generate QR code. Check console for details.', true);
+                    qrCodeContainer.classList.add('hidden');
+                }
+            });
+        });
+
+        // --- Decoder Logic ---
+        qrFileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+            
+            fileNameDisplay.textContent = file.name;
+            decodedResultContainer.classList.add('hidden');
+            hideMessage();
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    decodeCanvas.width = img.width;
+                    decodeCanvas.height = img.height;
+                    const ctx = decodeCanvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, img.width, img.height);
+                    
+                    const imageData = ctx.getImageData(0, 0, img.width, img.height);
+                    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                        inversionAttempts: "dontInvert",
+                    });
+
+                    if (code && code.data.startsWith('otpauth://')) {
+                        displayDecodedResult(code.data);
+                    } else {
+                        showMessage('Could not find a valid OTP QR code in the image.', true);
+                    }
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        function displayDecodedResult(url) {
+            try {
+                const parsedUrl = new URL(url);
+                const secret = parsedUrl.searchParams.get('secret');
+                const issuer = parsedUrl.searchParams.get('issuer');
+                let account = parsedUrl.pathname.substring(parsedUrl.pathname.lastIndexOf('/') + 1);
+                
+                // Clean up account name if issuer is present
+                if (issuer && account.startsWith(issuer + ':')) {
+                    account = account.substring(issuer.length + 1);
+                }
+
+                decodedContent.innerHTML = `
+                    <div class="grid grid-cols-3 gap-2 items-center">
+                        <strong class="col-span-1 text-gray-600">Issuer:</strong>
+                        <span class="col-span-2 font-mono bg-white p-2 rounded text-sm">${issuer || 'N/A'}</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 items-center">
+                        <strong class="col-span-1 text-gray-600">Account:</strong>
+                        <span class="col-span-2 font-mono bg-white p-2 rounded text-sm">${account || 'N/A'}</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 items-center">
+                        <strong class="col-span-1 text-gray-600">Secret:</strong>
+                        <div class="col-span-2 flex items-center bg-white p-2 rounded">
+                            <input id="decoded-secret-field" readonly class="font-mono text-sm w-full bg-transparent outline-none" value="${secret}">
+                            <button onclick="copySecret()" title="Copy secret" class="ml-2 text-gray-500 hover:text-indigo-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                decodedResultContainer.classList.remove('hidden');
+            } catch (e) {
+                console.error("Error parsing OTP URL:", e);
+                showMessage('The QR code contains an invalid OTP URL format.', true);
+            }
+        }
+
+        function copySecret() {
+            const secretField = document.getElementById('decoded-secret-field');
+            secretField.select();
+            secretField.setSelectionRange(0, 99999); // For mobile devices
+            try {
+                // Using the deprecated execCommand for broader compatibility within iframe environments
+                document.execCommand('copy');
+                showMessage('Secret copied to clipboard!', false);
+            } catch (err) {
+                console.error('Failed to copy: ', err);
+                showMessage('Failed to copy secret.', true);
+            }
+            window.getSelection().removeAllRanges();
+        }
+
+    </script>
+</body>
+</html>
